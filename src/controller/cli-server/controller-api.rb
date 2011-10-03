@@ -162,7 +162,7 @@ class Ctrl_api
 	end
 
 	#function submit_job: triggered when a "SUBMIT JOB" message is received, submits a job to the controller
-	def submit_job(name, description, code, nb_splayds, churn_trace, options, session_id)
+	def submit_job(name, description, code, nb_splayds, churn_trace, options, session_id, scheduled_at, strict)
 	 	#initializes the return variable
 		ret = Hash.new
 		#checks the validity of the session ID and stores the returning value in the variable user
