@@ -182,6 +182,9 @@ function submit_job_extra_checks()
 		nb_splayds = 1
 		--prints a message reporting it
 		print("\nThe number of splayds is forced to 1\n")
+	elseif (not nb_splayds and churn_trace_filename) then
+		-- prints message
+		print("\nThe number of splayds is given by the trace!")
 	elseif (nb_splayds<1 and not churn_trace_filename) then
 		--number of splayds is forced to 1
 		nb_splayds = 1
