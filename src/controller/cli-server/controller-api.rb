@@ -195,6 +195,17 @@ class Ctrl_api
 			else
 				name_field = "name='#{name}',"
 			end
+
+                        # scheduled job
+                        if scheduled_at && (scheduled_at > 0) then
+                        	time_scheduled = Time.at(scheduled_at).strftime("%Y-%m-%d %T")
+				options['scheduled_at'] = time_scheduled
+			end
+
+			# strict job
+                        if strict == "TRUE" then
+				options['strict'] = strict 
+                        end
 			
 			if churn_trace == "" then
 				churn_field = ""
@@ -223,6 +234,13 @@ class Ctrl_api
 				if job['status'] == "NO_RESSOURCES" then
 					ret['ok'] = false
 					ret['error'] = "JOB " + job['id'].to_s + ": " + job['status_msg']
+					return ret
+				end
+				# queued job behavior
+				if job['status'] == "QUEUED" then
+					ret['ok'] = true
+					ret['job_id'] = job['id']
+					ret['ref'] = ref
 					return ret
 				end
 			end
