@@ -317,6 +317,18 @@ class JobdTrace < Jobd
 						
 				$log.info("END OF TRACE (but we continue to keep the running nodes up)")
 
+        			# signal that trace ended
+				q_act = ""
+				$db.select_all "SELECT splayd_id FROM splayd_selections
+						WHERE
+						job_id='#{job['id']}'" do |splayd_id|
+
+					q_act = q_act + "('#{splayd_id}','#{job['id']}','TRACE_END','#{job['ref']}','WAITING'),"
+				end
+				q_act = q_act[0, q_act.length - 1]
+
+				$db.do "INSERT INTO actions (splayd_id, job_id, command, data, status) VALUES #{q_act}"
+
 				while true do
 					sleep(30)
 					replace_failed(job)
@@ -336,7 +348,7 @@ class JobdTrace < Jobd
 
 		$db.select_all "SELECT * FROM jobs WHERE
 				scheduler='#{@@scheduler}' AND
-				status='LOCAL' AND die_free='FALSE'" do |job|	#diff
+				status='LOCAL' AND die_free='FALSE'" do |job|
 
 			# Splayds selection
 			c_splayd, occupation, nb_selected_splayds, new_job, do_next = Jobd.status_local_common(job)	
@@ -353,7 +365,7 @@ class JobdTrace < Jobd
 			count = 0
 			occupation.sort {|a, b| a[1] <=> b[1]}
 			occupation.each do |splayd_id, occ|
-				q_sel = q_sel + "('#{splayd_id}','#{job['id']}', 'TRUE')," #diff
+				q_sel = q_sel + "('#{splayd_id}','#{job['id']}', 'TRUE'),"
 				q_job = q_job + "('#{splayd_id}','#{job['id']}','RESERVED'),"
 				q_act = q_act + "('#{splayd_id}','#{job['id']}','REGISTER', 'TEMP'),"
 	
@@ -367,8 +379,8 @@ class JobdTrace < Jobd
 			$db.select_all "SELECT * FROM job_mandatory_splayds
 					WHERE job_id='#{job['id']}'" do |mm|
 
-				splay_id = mm['splayd_id']
-				q_sel = q_sel + "('#{splayd_id}','#{job['id']}', 'TRUE')," #diff
+				splay_id = mm['splayd_id'] # bug?
+				q_sel = q_sel + "('#{splayd_id}','#{job['id']}', 'TRUE'),"
 				q_job = q_job + "('#{splayd_id}','#{job['id']}','RESERVED'),"
 				q_act = q_act + "('#{splayd_id}','#{job['id']}','REGISTER', 'TEMP'),"
 
@@ -439,8 +451,6 @@ class JobdTrace < Jobd
 							job_id='#{job['id']}'")
 				end
 
-
-
 				if start_nodes.size > 0
 					send_all_list(job, "SELECT * FROM splayd_selections WHERE
 							job_id='#{job['id']}' AND trace_status='RUNNING'")
@@ -472,6 +482,11 @@ class JobdTrace < Jobd
 		$db.select_all "SELECT * FROM jobs WHERE
 				scheduler='#{@@scheduler}' AND status='RUNNING'" do |job|
 			# TODO error msg...
+			
+			if not $db.select_one "SELECT * FROM splayd_jobs
+				WHERE job_id='#{job['id']}' AND status!='RESERVED'"
+				set_job_status(job['id'], 'ENDED')
+			end
 		end
 	end
 
@@ -482,7 +497,7 @@ class JobdTrace < Jobd
 
 		$db.select_all "SELECT * FROM jobs WHERE
 				scheduler='#{@@scheduler}' AND status='QUEUED' 
-				AND (scheduled_at is NULL OR scheduled_at<NOW()) AND die_free='FALSE'" do |job|	#diff
+				AND (scheduled_at is NULL OR scheduled_at<NOW()) AND die_free='FALSE'" do |job|
 
 			# Splayds selection
 			c_splayd, occupation, nb_selected_splayds, new_job, do_next = Jobd.status_queued_common(job)	
@@ -499,7 +514,7 @@ class JobdTrace < Jobd
 			count = 0
 			occupation.sort {|a, b| a[1] <=> b[1]}
 			occupation.each do |splayd_id, occ|
-				q_sel = q_sel + "('#{splayd_id}','#{job['id']}', 'TRUE')," #diff
+				q_sel = q_sel + "('#{splayd_id}','#{job['id']}', 'TRUE'),"
 				q_job = q_job + "('#{splayd_id}','#{job['id']}','RESERVED'),"
 				q_act = q_act + "('#{splayd_id}','#{job['id']}','REGISTER', 'TEMP'),"
 	
@@ -513,8 +528,8 @@ class JobdTrace < Jobd
 			$db.select_all "SELECT * FROM job_mandatory_splayds
 					WHERE job_id='#{job['id']}'" do |mm|
 
-				splay_id = mm['splayd_id']
-				q_sel = q_sel + "('#{splayd_id}','#{job['id']}', 'TRUE')," #diff
+				splay_id = mm['splayd_id'] # bug?
+				q_sel = q_sel + "('#{splayd_id}','#{job['id']}', 'TRUE'),"
 				q_job = q_job + "('#{splayd_id}','#{job['id']}','RESERVED'),"
 				q_act = q_act + "('#{splayd_id}','#{job['id']}','REGISTER', 'TEMP'),"
 

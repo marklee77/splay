@@ -37,7 +37,7 @@ class JobdStandard < Jobd
 		c_splayd = nil
 
 		$db.select_all "SELECT * FROM jobs WHERE
-				scheduler='#{@@scheduler}' AND status='LOCAL'" do |job| #diff
+				scheduler='#{@@scheduler}' AND status='LOCAL'" do |job|
 		
 			# Splayds selection
 			c_splayd, occupation, nb_selected_splayds, new_job, do_next = Jobd.status_local_common(job)	
@@ -54,7 +54,7 @@ class JobdStandard < Jobd
 			count = 0
 			occupation.sort {|a, b| a[1] <=> b[1]}
 			occupation.each do |splayd_id, occ|
-				q_sel = q_sel + "('#{splayd_id}','#{job['id']}')," #diff
+				q_sel = q_sel + "('#{splayd_id}','#{job['id']}'),"
 				q_job = q_job + "('#{splayd_id}','#{job['id']}','RESERVED'),"
 				q_act = q_act + "('#{splayd_id}','#{job['id']}','REGISTER', 'TEMP'),"
 	
@@ -69,7 +69,7 @@ class JobdStandard < Jobd
 					WHERE job_id='#{job['id']}'" do |mm|
 
 				splay_id = mm['splayd_id']
-				q_sel = q_sel + "('#{splayd_id}','#{job['id']}')," #diff
+				q_sel = q_sel + "('#{splayd_id}','#{job['id']}'),"
 				q_job = q_job + "('#{splayd_id}','#{job['id']}','RESERVED'),"
 				q_act = q_act + "('#{splayd_id}','#{job['id']}','REGISTER', 'TEMP'),"
 
