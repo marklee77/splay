@@ -1,4 +1,4 @@
-require"base"
+require"splay.base"
 require"chunk2"
 local events=require"splay.events"
 events.run(function()
