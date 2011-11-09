@@ -41,7 +41,7 @@ common_lib()
 function parse_arguments()
 	local i = 1
 	print(#arg)
-	if #arg > 0
+	if #arg > 0 then
 		lib_name = arg[1]
 	else
 		lib_name = ""
