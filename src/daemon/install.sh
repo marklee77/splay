@@ -55,6 +55,7 @@ cp splay_core.so $L_CPATH/
 cp luacrypto/crypto.so $L_CPATH/crypto.so
 cp misc_core.so $L_CPATH/splay/
 cp data_bits_core.so $L_CPATH/splay/
+cp lbase64/base64.so $L_CPATH/base64.so
 
 echo
 echo
