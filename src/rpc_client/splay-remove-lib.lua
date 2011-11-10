@@ -37,6 +37,13 @@ common_lib = loadfile("./lib/common.lua")
 common_lib()
 
 -- END LIBRARIES
+function add_usage_options()
+	table.insert(usage_options, "-l \tLIB_NAME\t\tRemove all libs by the name, it is mandatory")
+	table.insert(usage_options, "-lv \tLIB_VERSION\t\tFilter the libs to remove by their version")
+	table.insert(usage_options, "-a \tLIB_ARCH\t\tFilter the libs to remove by their architecture")
+	table.insert(usage_options, "-o \tLIB_OS\t\t\tFilter the libs to remove by their os target")
+	table.insert(usage_options, "-s \tLIB_SHA1\t\tRemove only one lib with the specific sha1")
+end
 
 function parse_arguments()
 	local i = 1
@@ -59,6 +66,9 @@ function parse_arguments()
 			lib_sha1 = arg[i]
 		end
 		i = i + 1
+	end
+	if lib_name == "" then
+		print_usage()
 	end
 end
 
@@ -113,10 +123,10 @@ if cli_server_url_from_conf_file then
 	min_arg_ok = true
 end
 
---add_usage_options()
+add_usage_options()
 
 print()
-
+command_name="splay-remove-lib"
 parse_arguments()
 
 check_min_arg()

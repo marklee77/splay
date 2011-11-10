@@ -38,16 +38,24 @@ common_lib()
 
 -- END LIBRARIES
 
-function parse_arguments()
-	local i = 1
-	print(#arg)
-	if #arg > 0 then
-		lib_name = arg[1]
-	else
-		lib_name = ""
-	end
+function add_usage_options()
+	table.insert(usage_options, "-l\tSpecify the lib name that we use to filter the list ")
 end
 
+
+function parse_arguments()
+	local i = 1
+	if #arg > 0 then
+		if arg[i] == "-l" then
+			i = i + 1
+			lib_name = arg[i]
+		else
+			print_usage()
+		end
+	else
+		lib_name=""
+	end
+end
 function send_list_libs(cli_server_url, lib_name, session_id)
 	
 	print("SESSION_ID     = "..session_id)
@@ -97,7 +105,7 @@ if cli_server_url_from_conf_file then
 	min_arg_ok = true
 end
 
---add_usage_options()
+add_usage_options()
 
 print()
 

@@ -47,6 +47,13 @@ sha1_lib()
 
 -- END LIBRARIES
 -- FUNCTIONS
+
+function add_usage_options()
+	table.insert(usage_options, "-l\tSpecify the name of the lib to submit ")
+	table.insert(usage_options, "-lv\tSpecify the version of the lib to submit")
+	table.insert(usage_options, "-a\tSpecify the architecture for which the lib has been built. Usually either i386, i686 or x86_64")
+	table.insert(usage_options, "-o\tSpecify the os for which the lib has been built. Usually Linux or Darwin")
+end
 function parse_arguments()
 	-- parse -l -o -a -v
 	-- set lib_XX
@@ -69,22 +76,26 @@ function parse_arguments()
 		end
 		i = i + 1 
 	end
+	local ok = true
 	if lib_filename == nil then
 		print("missing parameter")
 		print("filename" )
-		os.exit()
+		ok = false
 	elseif lib_version == nil then
 		print("missing parameter")
 		print("version")
-		os.exit()
+		ok = false
 	elseif lib_arch == nil then
 		print("missing parameter")		
 		print("arch ")
-		os.exit()
+		ok = false
 	elseif lib_os == nil then
 		print("missing parameter")
 		print("os")
-		os.exit()
+		ok = false
+	end
+	if not ok then
+		print_usage()
 	end
 end
 
@@ -155,12 +166,20 @@ lib_arch = nil
 lib_version = nil
 lib_blob = nil
 session_id = nil
+command_name="splay-submit-lib"
 
 --maximum HTTP payload size is 10MB (overriding the max 2KB set in library socket.lua)
 socket.BLOCKSIZE = 10000000
 load_config()
+
+add_usage_options()
+
 parse_arguments()
+
 check_cli_server()
+
 check_session_id()
+
 load_file(lib_filename)
+
 send_submit_lib(lib_filename, lib_os, lib_arch, lib_version, lib_blob, session_id)
