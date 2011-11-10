@@ -1010,7 +1010,7 @@ function list_libs_in_cache(dir)
 		lib = io.open(dir.."/"..lib_name):read("*a")
 		local sha1=evp.new("sha1")
 		lib_sha1 =  sha1:digest(lib)
-		print("found file with sha1 ",lib_sha1)
+		print("splayd.lua:list_libs file with sha1 ",lib_sha1)
 		table.insert(lib_table, {name = lib_name, sha1 = lib_sha1})
 	end
 	
