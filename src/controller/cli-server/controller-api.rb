@@ -29,6 +29,9 @@
 require '../lib/common.rb'
 #library required for hashing
 require 'digest/sha1'
+#required for merging multiple files
+require 'lua-merger.rb'
+
 #Main class
 class Ctrl_api
 	#function get_log: triggered when a "GET LOG" message is received, returns the corresponding log file as a string
@@ -162,7 +165,7 @@ class Ctrl_api
 	end
 
 	#function submit_job: triggered when a "SUBMIT JOB" message is received, submits a job to the controller
-	def submit_job(name, description, code, nb_splayds, churn_trace, options, session_id, scheduled_at, strict)
+	def submit_job(name, description, code, nb_splayds, churn_trace, options, session_id, scheduled_at, strict, multiple_code_nodes)
 	 	#initializes the return variable
 		ret = Hash.new
 		#checks the validity of the session ID and stores the returning value in the variable user
@@ -196,26 +199,32 @@ class Ctrl_api
 				name_field = "name='#{name}',"
 			end
 
-                        # scheduled job
-                        if scheduled_at && (scheduled_at > 0) then
-                        	time_scheduled = Time.at(scheduled_at).strftime("%Y-%m-%d %T")
+			#scheduled job
+			if scheduled_at && (scheduled_at > 0) then
+				time_scheduled = Time.at(scheduled_at).strftime("%Y-%m-%d %T")
 				options['scheduled_at'] = time_scheduled
 			end
 
-			# strict job
-                        if strict == "TRUE" then
+			#strict job
+			if strict == "TRUE" then
 				options['strict'] = strict 
-                        end
+			end
 			
 			if churn_trace == "" then
 				churn_field = ""
-			else
+			else	
 				options['nb_splayds'] = 0
 				churn_trace.lines do |line|
 					options['nb_splayds'] = options['nb_splayds'] + 1
 				end
 				options['scheduler'] = 'trace'
 				churn_field = "die_free='FALSE', scheduler_description='#{addslashes(churn_trace)}',"
+			end
+
+			#multifile job
+			if multiple_code_nodes == true then
+				options['multifile'] = multiple_code_nodes
+				code = LuaMerger.new.merge_lua_files(code)
 			end
 
 			$db.do("INSERT INTO jobs SET ref='#{ref}' #{to_sql(options)}, #{description_field} #{name_field} #{churn_field} code='#{addslashes(code)}', user_id=#{user_id}, created_at='#{time_now}'")
@@ -236,7 +245,7 @@ class Ctrl_api
 					ret['error'] = "JOB " + job['id'].to_s + ": " + job['status_msg']
 					return ret
 				end
-				# queued job behavior
+				#queued job behavior
 				if job['status'] == "QUEUED" then
 					ret['ok'] = true
 					ret['job_id'] = job['id']

@@ -99,6 +99,7 @@ def init_db(db)
 			created_at datetime default NULL,
                         scheduled_at datetime default NULL,
                         strict ENUM('TRUE','FALSE') DEFAULT 'FALSE',
+						multifile ENUM('TRUE','FALSE') DEFAULT 'FALSE',
 			
 			name VARCHAR(255),
 			description VARCHAR(255),
