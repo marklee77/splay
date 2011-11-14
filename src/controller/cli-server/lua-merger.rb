@@ -45,7 +45,7 @@ class LuaMerger
 		end
 	end
 
-	def merge_lua_files(code)
+	def merge_lua_files(code,ret)
 		code = Base64.decode64(code)
 		#retrieve OS's temporary file path
 		tmp_dir = Dir.tmpdir
@@ -139,6 +139,8 @@ class LuaMerger
 		global_vars = Hash.new(nil)
 		local_vars = Hash.new(nil)
 
+		events_run = ""
+
 		#this will contain the merged file
 		code = ""
 
@@ -188,8 +190,8 @@ class LuaMerger
 					if ((libraries.include? lib) and !(nodes.include? lib)) then
 						if (library_var[lib] != nil) then
 							#error: same library included with different names
-							ret['error'] = "Error: module " + lib + " is allocated to two different variables: " + var_name + " and " + library_var[lib]
-							return ret
+							ret['error'] = "module " + lib + " is allocated to two different variables: " + var_name + " and " + library_var[lib]
+							return "", ret
 						end
 					end
 					next
@@ -221,11 +223,27 @@ class LuaMerger
 					if ((libraries.include? lib) and !(nodes.include? lib)) then
 						if (library_var[lib] != var_name) then
 							#error: same library included with different names
-							ret['error'] = "Error: module " + lib + " is allocated to two different variables: " + var_name + " and " + library_var[lib]
-							return ret
+							ret['error'] = "module " + lib + " is allocated to two different variables: " + var_name + " and " + library_var[lib]
+							return "", ret
 						end
 					end
 					next
+				end
+
+				if /^[ \t]*events\.loop[ (\t]/.match(trim_line) != nil then
+					if events_run != "" then
+						ret['error'] = "" + trim_line + " conflicts with " + events_run
+						return "", ret
+					end
+					events_run = trim_line
+				end
+
+				if /^[ \t]*events\.run[ (\t]/.match(trim_line) != nil then
+					if events_run != "" then
+						ret['error'] = "" + trim_line + " conflicts with " + events_run
+						return "", ret
+					end
+					events_run = trim_line
 				end
 
 				#functions
@@ -351,6 +369,6 @@ class LuaMerger
 		#remove tmp dir
 		FileUtils.remove_entry_secure tmp_job_dir
 
-		return code
+		return code, ret
 	end
 end

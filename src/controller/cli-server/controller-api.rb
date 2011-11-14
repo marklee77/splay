@@ -224,7 +224,10 @@ class Ctrl_api
 			#multifile job
 			if multiple_code_nodes == true then
 				options['multifile'] = multiple_code_nodes
-				code = LuaMerger.new.merge_lua_files(code)
+				code, ret = LuaMerger.new.merge_lua_files(code, ret)
+				if code == "" then
+					return ret
+				end
 			end
 
 			$db.do("INSERT INTO jobs SET ref='#{ref}' #{to_sql(options)}, #{description_field} #{name_field} #{churn_field} code='#{addslashes(code)}', user_id=#{user_id}, created_at='#{time_now}'")
