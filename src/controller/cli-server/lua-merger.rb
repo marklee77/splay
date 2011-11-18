@@ -139,8 +139,6 @@ class LuaMerger
 		global_vars = Hash.new(nil)
 		local_vars = Hash.new(nil)
 
-		events_run = ""
-
 		#this will contain the merged file
 		code = ""
 
@@ -149,6 +147,8 @@ class LuaMerger
 
 		library_code = ""
 		other_code = ""
+		main_code = ""
+		has_events_thread = false
 
 		sorted_nodes.each { |file|
 			file_path = tmp_job_dir + "/" + file + ".lua"
@@ -159,6 +159,7 @@ class LuaMerger
 
 			count_to_end = 0
 			parser_is_in_function = false
+			parser_is_in_main = false
 			current_function_index = 0
 
 			file_code = ""
@@ -230,25 +231,23 @@ class LuaMerger
 					next
 				end
 
-				if /^[ \t]*events\.loop[ (\t]/.match(trim_line) != nil then
-					if events_run != "" then
-						ret['error'] = "" + trim_line + " conflicts with " + events_run
-						return "", ret
-					end
-					events_run = trim_line
+				if /^[ \t]*events\.thread[ (\t]/.match(trim_line) != nil then
+					has_events_thread = true
 				end
 
-				if /^[ \t]*events\.run[ (\t]/.match(trim_line) != nil then
-					if events_run != "" then
-						ret['error'] = "" + trim_line + " conflicts with " + events_run
-						return "", ret
-					end
-					events_run = trim_line
+				#events.run
+				if /^[ \t]*events\.run[ (\t]/.match(trim_line) != nil or /^[ \t]*events\.loop[ (\t]/.match(trim_line) != nil then
+					#if main_code != "" then
+						#ret['error'] = "" + trim_line + " conflicts with " + main_code
+						#return "", ret
+					#end
+					#main_code = trim_line
+					parser_is_in_main = true
 				end
 
 				#functions
 				#search for named functions
-				if ((trim_line.start_with? 'function') and /function[ \t]\(/.match(trim_line) == nil and parser_is_in_function == false) then
+				if ((trim_line.start_with? 'function') and /function[ \t]\(/.match(trim_line) == nil and parser_is_in_function == false and parser_is_in_main == false) then
 					parser_is_in_function = true
 					# isolate function name
 					position = trim_line.index("(")
@@ -276,15 +275,22 @@ class LuaMerger
 					next
 				end
 
+				if (parser_is_in_main == true) then
+					if /^[ \t]*events\.run[ (\t]/.match(trim_line) == nil and /^[ \t]*events\.loop[ (\t]/.match(trim_line) == nil and (/^[ \t]*end[ )\t]/.match(trim_line) == nil and count_to_end == 0) then
+						main_code += line
+					end
+					next
+				end
+
 				if (parser_is_in_function == true) then
 					functionsCode[current_function_index] += line
 				end
 
-				if (parser_is_in_function == true and (trim_line.include? 'if' or line.include? 'while')) then
+				if ((parser_is_in_function == true or parser_is_in_main == true) and (trim_line.include? 'if' or line.include? 'while')) then
 					count_to_end = count_to_end + 1
 				end
 
-				if (parser_is_in_function == true and trim_line.include? 'end') then
+				if ((parser_is_in_function == true or parser_is_in_main == true) and trim_line.include? 'end') then
 					if (count_to_end > 0) then
 						count_to_end = count_to_end - 1
 					else
@@ -350,6 +356,10 @@ class LuaMerger
 					#replace the name in that instance
 					s.sub(orig_name,new_name)
 				}
+				main_code = main_code.gsub(regex) { |s|
+					#replace the name in that instance
+					s.sub(orig_name,new_name)
+				}
 			
 			}
 			other_code += file_code
@@ -362,10 +372,28 @@ class LuaMerger
 				library_code += "local " + library_var[lib] + "=require\"" + lib + "\"\n"
 			end
 		}
+
+		#warning
+		if (main_code.length == 0 and has_events_thread == false) then
+			ret['error'] = "main function - events.run() or events.loop() - is missing"
+			return "", ret
+		end
+
+		if (has_events_thread == true) then
+			if (main_code.length > 0) then
+				main_code = "events.thread(\n" + main_code + ")\nevents.run()\n"
+			else
+				main_code = "events.run()\n"
+			end
+		else
+			main_code = "events.run(\n" + main_code + ")\n"
+		end
+
 		aFile.write(library_code)
 		aFile.write(other_code)
+		aFile.write(main_code)
+		code = library_code + other_code + main_code
 		aFile.close()
-		code = library_code + other_code
 		#remove tmp dir
 		FileUtils.remove_entry_secure tmp_job_dir
 
