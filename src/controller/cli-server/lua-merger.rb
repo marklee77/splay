@@ -191,7 +191,7 @@ class LuaMerger
 					if ((libraries.include? lib) and !(nodes.include? lib)) then
 						if (library_var[lib] != nil) then
 							#error: same library included with different names
-							ret['error'] = "module " + lib + " is allocated to two different variables: " + var_name + " and " + library_var[lib]
+							ret['error'] = "module " + lib + " is allocated to two different variables: " + "nil" + " and " + library_var[lib]
 							return "", ret
 						end
 					end
