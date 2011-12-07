@@ -19,9 +19,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with Splayd. If not, see <http://www.gnu.org/licenses/>.
 
-
 class Jobd
-
 	@@threads = {} # to kill
 	# To protect all functions that will issue REGISTERs actions.
 	@@dlock_jr = DistributedLock.new('job_reservation')
@@ -46,8 +44,8 @@ class Jobd
 				status_running
 				kill_max_time
 				command
-        			status_queued
-      end
+				status_queued
+			end
 		rescue => e
 			$log.fatal(e.class.to_s + ": " + e.to_s + "\n" + e.backtrace.join("\n"))
 		end
@@ -296,7 +294,7 @@ class Jobd
 			hostmasks_filter = " AND (ip LIKE '#{hm_t}' OR hostname LIKE '#{hm_t}') "
 		end
 
-    		resources_filter = "AND (splayds.status='AVAILABLE') AND
+		resources_filter = "AND (splayds.status='AVAILABLE') AND
 					max_mem >= '#{job['max_mem']}' AND
 					disk_max_size >= '#{job['disk_max_size']}' AND
 					disk_max_files >= '#{job['disk_max_files']}' AND
@@ -318,6 +316,22 @@ class Jobd
 			mandatory_filter += " AND splayds.id!=#{mm['splayd_id']} "
 		end
 
+		# problem here
+		designated_filter = ""
+		pos = 0
+		$db.select_all "SELECT * FROM job_designated_splayds
+				WHERE job_id='#{job['id']}'" do |jds|
+			if pos == 0
+				designated_filter += " AND (splayds.id=#{jds['splayd_id']}"
+			else
+				designated_filter += " OR splayds.id=#{jds['splayd_id']}"
+			end
+			pos=pos+1
+		end
+		if designated_filter != ""
+			designated_filter += ")"
+		end
+
 		return "SELECT * FROM splayds WHERE
 				1=1
 				#{version_filter}
@@ -325,6 +339,7 @@ class Jobd
 				#{localization_filter}
 				#{bytecode_filter}
 				#{mandatory_filter}
+				#{designated_filter}
 				#{hostmasks_filter}
 				#{distance_filter}
 				ORDER BY RAND()"
@@ -426,30 +441,51 @@ class Jobd
 			end
 		end
 
-      		no_resources = false
+		# Designated splayds filter
+		# ??? also use resource and bytecode filters ???
+		designated_ok = true
+		$db.select_all("SELECT * FROM job_designated_splayds
+				WHERE job_id='#{job['id']}'") do |jds|
+			ds = $db.select_one "SELECT id FROM splayds WHERE
+					id='#{jds['splayd_id']}'"
+			if ds
+				if c_splayd['nb_nodes'][ds['id']] == c_splayd['max_number'][ds['id']]
+					status_msg += "Designated splayd: #{ds['id']} " +
+							"has no free slot.\n"
+					designated_ok = false
+				end
+			else
+				status_msg += "Designated splayd: #{jds['splayd_id']}" + 
+					" does not have the requested ressources or is not available.\n"
+				designated_ok = false # redundant???
+				no_resources = true
+			end
+		end
+
+		no_resources = false
 
 		# Compute the number of splayds with the required characteristics
 		if occupation.size < job['nb_splayds']
-        		nb_total = 0
-        		$db.select_all(create_filter_query(job)) do |m|
-          			nb_total = nb_total + 1
-        		end
+			nb_total = 0
+			$db.select_all(create_filter_query(job)) do |m|
+				nb_total = nb_total + 1
+		end
 
 			# Set flag if not enough splayds are available
-        		if nb_total < job['nb_splayds']
-          			no_resources = true
-        		end
+			if nb_total < job['nb_splayds']
+				no_resources = true
+			end
 
 			status_msg += "Not enough splayds found with the requested ressources " +
-					"(only #{occupation.size} instead of #{job['nb_splayds']})"
+					"(only #{occupation.size} instead of #{job['nb_splayds']}) \n"
 				normal_ok = false
 			 end
 
-			 ### Mandatory splayds
-			 mandatory_ok = true
+			### Mandatory splayds
+			mandatory_ok = true
 
-			 $db.select_all("SELECT * FROM job_mandatory_splayds
-			  		 WHERE job_id='#{job['id']}'") do |mm|
+			$db.select_all("SELECT * FROM job_mandatory_splayds
+					 WHERE job_id='#{job['id']}'") do |mm|
 
 				m = $db.select_one "SELECT id, ref FROM splayds WHERE
 						id='#{mm['splayd_id']}'
@@ -471,46 +507,41 @@ class Jobd
 			 end
 
 			 # Set status to NO_RESOURCES
-			 if not mandatory_ok or (not normal_ok and no_resources)
+			 if no_resources #(not normal_ok and no_resources) or (not designated_ok and no_resources) 
 				set_job_status(job['id'], 'NO_RESSOURCES', status_msg)
-			  	#next
-				return c_splayd, occupation, status_msg, normal_ok, mandatory_ok, no_resources, true
+				return c_splayd, occupation, status_msg, normal_ok, mandatory_ok, designated_ok, no_resources, true
 			 end
 
-		return c_splayd, occupation, status_msg, normal_ok, mandatory_ok, no_resources, false
+		return c_splayd, occupation, status_msg, normal_ok, mandatory_ok, designated_ok, no_resources, false
 	end
 
 	# Splayds selection for JobdStandard and JobdTrace
 	def self.status_local_common(job)
 
-		c_splayd, occupation, status_msg, normal_ok, mandatory_ok, no_resources, do_next = self.select_splayds(job)
+		c_splayd, occupation, status_msg, normal_ok, mandatory_ok, designated_ok, no_resources, do_next = self.select_splayds(job)
 		if do_next == true
-			# next
 			return c_splayd, occupation, 0, nil, true
 		end
 
 		# Queue scheduled jobs
-      		time_now = Time.new().strftime("%Y-%m-%d %T")
-      		if job['scheduled_at'] && job['scheduled_at'].strftime("%Y-%m-%d %T") > time_now
+		time_now = Time.new().strftime("%Y-%m-%d %T")
+		if job['scheduled_at'] && job['scheduled_at'].strftime("%Y-%m-%d %T") > time_now
 			set_job_status(job['id'], 'QUEUED', status_msg)
-        		#next
 			return c_splayd, occupation, 0, nil, true
-      		end
+		end
 
-      		if not normal_ok and not no_resources
+		if(not normal_ok or not designated_ok) and not no_resources
 			if job['strict'] == "FALSE"
-        			set_job_status(job['id'], 'QUEUED', status_msg)
-        			#next
+				set_job_status(job['id'], 'QUEUED', status_msg)
 				return c_splayd, occupation, 0, nil, true
 			else
 				status_msg = "Cannot be submitted immediately: " + 
-					     "Not enough splayds found with the requested resources " + 
-					     "(only #{occupation.size} instead of #{job['nb_splayds']})"
+					"Not enough splayds found with the requested resources " + 
+					"(only #{occupation.size} instead of #{job['nb_splayds']}) \n"
 				set_job_status(job['id'], 'NO_RESSOURCES', status_msg)
-        			#next
 				return c_splayd, occupation, 0, nil, true
 			end
-      		end
+		end
 
 		# We will send the job !
 		new_job = create_job_json(job)
@@ -539,35 +570,32 @@ class Jobd
 
 			$db.do "DELETE FROM splayd_selections WHERE
 					job_id='#{job['id']}'"
-		    
-			set_job_status(job['id'], 'REGISTER_TIMEOUT')		
+			set_job_status(job['id'], 'REGISTER_TIMEOUT')
 		end
 	end
 
 	def self.status_queued_common(job)
-
-		c_splayd, occupation, status_msg, normal_ok, mandatory_ok, no_resources, do_next = self.select_splayds(job)
+		c_splayd, occupation, status_msg, normal_ok, mandatory_ok, designated_ok, no_resources, do_next = self.select_splayds(job)
 		if do_next == true
-			# next
 			return c_splayd, occupation, 0, nil, true
 		end
 
-		if not mandatory_ok or (not normal_ok and no_resources)
+		if (not normal_ok or not designated_ok) and no_resources
 			set_job_status(job['id'], 'NO_RESSOURCES', status_msg)
-			return c_splayd, occupation, 0, nil, true #next
+			return c_splayd, occupation, 0, nil, true
 		end
 
-                if not normal_ok and not no_resources
+		if (not normal_ok or not designated_ok) and not no_resources
 			if job['strict'] == "FALSE"
-        			return c_splayd, occupation, 0, nil, true #next
+				return c_splayd, occupation, 0, nil, true
 			else
 				status_msg = "Cannot be submitted immediately: " + 
-					     "Not enough splayds found with the requested resources " + 
-					     "(only #{occupation.size} instead of #{job['nb_splayds']})"
+					"Not enough splayds found with the requested resources " + 
+					"(only #{occupation.size} instead of #{job['nb_splayds']}) \n"
 				set_job_status(job['id'], 'NO_RESSOURCES', status_msg)
-        			return c_splayd, occupation, 0, nil, true #next
+				return c_splayd, occupation, 0, nil, true
 			end
-      		end
+		end
 
 		# We will send the job !
 

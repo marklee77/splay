@@ -37,7 +37,7 @@ class SplaydServer
 	def run
 		return Thread.new() do
 			main
-		end
+		end						
 	end
 
 	def main

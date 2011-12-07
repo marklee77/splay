@@ -52,7 +52,9 @@ function add_usage_options()
 	table.insert(usage_options, "    --absolute-time \t\tthe job will be submitted at [YYYY-MM-DD] HH:MM:SS")
 	table.insert(usage_options, "    --relative-time \t\tthe job will be submitted after HH:MM:SS")
 	table.insert(usage_options, "    --strict \t\t\tthe job will be submitted now / at the scheduled time or rejected with NO_RESSOURCES message")
-	table.insert(usage_options, "    --tar=lua-files.tar.gz\t\tsubmit a job that consists of multiple Lua files")
+	table.insert(usage_options, "    --tar=lua-files.tar.gz\tsubmit a job that consists of multiple Lua files")
+	table.insert(usage_options, "    --splayds=[id1,id2,id3]\trun job only on the designated splayds")
+	table.insert(usage_options, "    --splayds-as-job JOB_ID\trun job with the same designated splayds as for job JOB_ID")
 end
 
 function parse_arguments()
@@ -61,19 +63,39 @@ function parse_arguments()
 		--if argument is "-c"
 		if arg[i] == "-c" then
 			i = i + 1
-			--the churn trace file is the next argument
+			--the churn trace file is the other part of the argument
 			churn_trace_filename = arg[i]
+			--print warning messages if used with options "--splayds" or "--splayds-as-job"
+			if nb_designated_splayds > 0 then
+				print("Warning: Cannot run a churn job on designated splayds. The \"--splayds\" option will be ignored.\n")
+				nb_designated_splayds = 0
+				designated_splayds_string = ""
+			end
+			if string.len(splayds_as_job) > 0 then
+				print("Warning: Cannot specify on which splayds to run a churn job. The \"--splayds-as-job\" option will be ignored.\n")
+				splayds_as_job = ""
+			end
 		--if argument contains "--churn=" at the beginning
-		elseif string.find(arg[i], "^--churn=") then
+		elseif string.find(arg[i], "--churn=",1,true) then
 			--the churn trace file is the other part of the argument
 			churn_trace_filename = string.sub(arg[i], 9)
+			--print warning messages if used with options "--splayds" or "--splayds-as-job"
+			if nb_designated_splayds > 0 then
+				print("Warning: Cannot run a churn job on designated splayds. The \"--splayds\" option will be ignored.\n")
+				nb_designated_splayds = 0
+				designated_splayds_string = ""
+			end
+			if string.len(splayds_as_job) > 0 then
+				print("Warning: Cannot specify on which splayds to run a churn job. The \"--splayds-as-job\" option will be ignored.\n")
+				splayds_as_job = ""
+			end
 		--if argument is "-o"
 		elseif arg[i] == "-o" then
 			i = i + 1
 			--the string "options" is the next argument
 			options_string = arg[i]
 		--if argument contains "--options=" at the beginning
-		elseif string.find(arg[i], "^--options=") then
+		elseif string.find(arg[i], "--options=",1,true) then
 			--the string "options" is extracted from the rest of the argument
 			options_string = string.sub(arg[i], 11)
 		--if argument is "-h" or "--help"
@@ -82,15 +104,54 @@ function parse_arguments()
 			print("send \"SUBMIT JOB\" command to the SPLAY CLI server; submits a job for execution\n")
 			--prints the usage
 			print_usage()
+		--if argument is "--splayds=[id1,id2,id3]"
+		elseif string.find(arg[i], "--splayds=",1,true) then
+			if nb_splayds then
+				print("Warning: The \"-n\" and \"--nb_splayds\" options are redundant when using designated splayds. The job will be executed on the designated splayds.\n")
+			end
+			--prints warning message if the --churn or -c option is already used
+			if churn_trace_filename then
+				print("Warning: Cannot run a churn job on designated splayds. The \"--splayds\" option will be ignored.\n")
+			else
+				designated_splayds_string = string.sub(arg[i], 12, string.len(arg[i])-1)
+				--compute the number of splayds
+				if nb_splayds == nil then
+					nb_designated_splayds = 0
+					for s in string.gmatch(designated_splayds_string, "%d+") do
+						nb_designated_splayds = nb_designated_splayds + 1
+					end
+					nb_splayds = nb_designated_splayds
+				end
+			end
+		--if argument is "--splayds-as-job"
+		elseif arg[i] == "--splayds-as-job" then
+			i = i + 1
+			if nb_splayds then
+				print("Warning: The \"-n\" and \"--nb_splayds\" options are redundant when using designated splayds. The job will be executed on the designated splayds.\n")
+			end
+			if churn_trace_filename then
+				print("Warning: Cannot specify on which splayds to run a churn job. The \"--splayds-as-job\" option will be ignored.\n")
+			else
+				splayds_as_job = tonumber(arg[i])
+				nb_splayds = 1
+			end
 		--if argument is "-n"
 		elseif arg[i] == "-n" then
 			i = i + 1
-			--the number of splayds is the next argument
-			nb_splayds = tonumber(arg[i])
+			if nb_designated_splayds > 0 or string.len(splayds_as_job) > 0 then
+				print("Warning: The \"-n\" option is redundant when using designated splayds. The job will be executed on the designated splayds.\n")
+			else
+				--the number of splayds is the next argument
+				nb_splayds = tonumber(arg[i])
+			end
 		--if argument contains "--nb_splayds=" at the beginning
-		elseif string.find(arg[i], "^--nb-splayds=") then
-			--the number of splayds is extracted from the rest of the argument
-			nb_splayds = tonumber(string.sub(arg[i], 14))
+		elseif string.find(arg[i], "--nb-splayds=",1,true) then
+			if nb_designated_splayds > 0 or string.len(splayds_as_job) > 0 then
+				print("Warning: The \"--nb-splayds\" option is redundant when using designated splayds. The job will be executed on the designated splayds.\n")
+			else
+				--the number of splayds is extracted from the rest of the argument
+				nb_splayds = tonumber(string.sub(arg[i], 14))
+			end
 		--if argument is "-i" or "--cli_server_as_ip_addr"
 		elseif arg[i] == "-i" or arg[i] == "--cli_server_as_ip_addr" then
 			--Flag cli_server_as_ip_addr is true
@@ -101,7 +162,7 @@ function parse_arguments()
 		elseif arg[i] == "-N" or arg[i] == "--name" then
 			--Flag ask_for_name is true
 			ask_for_name = true
-		elseif string.find(arg[i], "^--args=") then
+		elseif string.find(arg[i], "--args=",1,true) then
 			job_args= string.sub(arg[i], 8)		
 		elseif 	arg[i] == "-a" then
 			i = i + 1
@@ -155,7 +216,7 @@ function parse_arguments()
 		elseif arg[i] == "--strict" then
 			strict = "TRUE"
 		-- if argument is "--tar=LUA1,LUA2"
-		elseif string.find(arg[i], "^--tar=") then
+		elseif string.find(arg[i], "--tar=",1,true) then
 			-- the rest of this argument consists of Lua tarball
 			job_tar = string.sub(arg[i],7)
 			-- set code file name
@@ -241,7 +302,7 @@ function submit_job_extra_checks()
 end
 
 --function send_submit_job: sends a "SUBMIT JOB" command to the SPLAY RPC server
-function send_submit_job(name, description, code_filename, nb_splayds, churn_trace_filename, options, job_args, cli_server_url, session_id, scheduled_at, strict, multiple_code_files)
+function send_submit_job(name, description, code_filename, nb_splayds, churn_trace_filename, options, job_args, cli_server_url, session_id, scheduled_at, strict, multiple_code_files, designated_splayds_string, splayds_as_job)
 	--prints the arguments
 	print("NAME              = "..name)
 	print("DESCRIPTION       = "..description)
@@ -329,7 +390,7 @@ function send_submit_job(name, description, code_filename, nb_splayds, churn_tra
 	--prepares the body of the message
 	local body = json.encode({
 		method = "ctrl_api.submit_job",
-		params = {name, description, code, nb_splayds, churn_trace, options, session_id, scheduled_at, strict, multiple_code_files}
+		params = {name, description, code, nb_splayds, churn_trace, options, session_id, scheduled_at, strict, multiple_code_files, designated_splayds_string, splayds_as_job}
 	})
 	
 	--prints that it is sending the message
@@ -365,6 +426,9 @@ session_id = nil
 scheduled_at = nil
 strict = "FALSE"
 multiple_code_files = false
+designated_splayds_string = ""
+nb_designated_splayds = 0
+splayds_as_job = ""
 
 cli_server_url_from_conf_file = nil
 
@@ -395,4 +459,4 @@ check_session_id()
 submit_job_extra_checks()
 
 --calls send_submit_job
-send_submit_job(name, description, code_filename, nb_splayds, churn_trace_filename, options, job_args, cli_server_url, session_id, scheduled_at, strict, multiple_code_files)
+send_submit_job(name, description, code_filename, nb_splayds, churn_trace_filename, options, job_args, cli_server_url, session_id, scheduled_at, strict, multiple_code_files, designated_splayds_string, splayds_as_job)

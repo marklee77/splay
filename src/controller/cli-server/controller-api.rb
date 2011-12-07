@@ -1,36 +1,36 @@
-## Splay Controller ### v1.1 ###
-## Copyright 2006-2011
-## http://www.splay-project.org
-## 
-## 
-## 
-## This file is part of Splay.
-## 
-## Splayd is free software: you can redistribute it and/or modify 
-## it under the terms of the GNU General Public License as published 
-## by the Free Software Foundation, either version 3 of the License, 
-## or (at your option) any later version.
-## 
-## Splayd is distributed in the hope that it will be useful,but 
-## WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
-## See the GNU General Public License for more details.
-## 
-## You should have received a copy of the GNU General Public License
-## along with Splayd. If not, see <http://www.gnu.org/licenses/>.
+##Splay Controller ###v1.1 ###
+##Copyright 2006-2011
+##http://www.splay-project.org
+##
+##
+##
+##This file is part of Splay.
+##
+##Splayd is free software: you can redistribute it and/or modify 
+##it under the terms of the GNU General Public License as published 
+##by the Free Software Foundation, either version 3 of the License, 
+##or (at your option) any later version.
+##
+##Splayd is distributed in the hope that it will be useful,but 
+##WITHOUT ANY WARRANTY; without even the implied warranty of
+##MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+##See the GNU General Public License for more details.
+##
+##You should have received a copy of the GNU General Public License
+##along with Splayd. If not, see <http://www.gnu.org/licenses/>.
 
-# JSON-RPC over HTTP client for SPLAY controller in Ruby - server side
-# Created by José Valerio
+#JSON-RPC over HTTP client for SPLAY controller in Ruby - server side
+#Created by José Valerio
 #
-# based on tutorial for Orbjson:
-# http://orbjson.rubyforge.org/tutorial/getting_started_with_orbjson_short_version.pdf
-# http://orbjson.rubyforge.org/tutorial/tutorial_code.tgz
+#based on tutorial for Orbjson:
+#http://orbjson.rubyforge.org/tutorial/getting_started_with_orbjson_short_version.pdf
+#http://orbjson.rubyforge.org/tutorial/tutorial_code.tgz
 
 require '../lib/common.rb'
 #library required for hashing
 require 'digest/sha1'
-#required for merging multiple files
-require 'lua-merger.rb'
+
+require File.expand_path(File.join(File.dirname(__FILE__), '../cli-server/lua-merger.rb'))
 
 #Main class
 class Ctrl_api
@@ -41,7 +41,7 @@ class Ctrl_api
 		#checks the validity of the session ID and stores the returning value in the variable user
 		user = check_session_id(session_id)
 		#check_session_id returns false if the session ID is not valid; if user is not false (the session ID
-		# is valid)
+		#is valid)
 		if (user) then
 			#user_id is taken from the field 'id' from variable user
 			user_id = user['id']
@@ -59,7 +59,7 @@ class Ctrl_api
 				return ret
 			end
 			#if the 'if (user)' statement was true, the function would have ended with the return on the line above,
-			# if not, the following lines are processed
+			#if not, the following lines are processed
 			#ok is false
 			ret['ok'] = false
 			if user['admin'] == 1 then
@@ -79,8 +79,8 @@ class Ctrl_api
 		return ret
 	end
 
-#function get_job_code: triggered when a "GET JOB CODE" message is received, returns the corresponding
-# source code as a string
+	#function get_job_code: triggered when a "GET JOB CODE" message is received, returns the corresponding
+	#source code as a string
 	def get_job_code(job_id, session_id)
 		#initializes the return variable
 		ret = Hash.new
@@ -105,7 +105,7 @@ class Ctrl_api
 				end
 			end
 			#if the 'if (user)' statement was true, the function would have ended with the return on the line above,
-			# if not, the following lines are processed
+			#if not, the following lines are processed
 			#ok is false
 			ret['ok'] = false
 			#error says that the job doesn't exist
@@ -139,7 +139,7 @@ class Ctrl_api
 			#if the user is admin (can see all the jobs) or the job belongs to her
 			if ((user['admin'] == 1) or ($db.select_one("SELECT * FROM jobs WHERE id=#{job_id} AND user_id=#{user_id}"))) then
 				#writes KILL in the field 'command' of table 'jobs'; the contoller takes this command as an order
-				# to kill the job
+				#to kill the job
 				$db.do("UPDATE jobs SET command='KILL' WHERE id='#{job_id}'")
 				#ok is true
 				ret['ok'] = true
@@ -165,8 +165,8 @@ class Ctrl_api
 	end
 
 	#function submit_job: triggered when a "SUBMIT JOB" message is received, submits a job to the controller
-	def submit_job(name, description, code, nb_splayds, churn_trace, options, session_id, scheduled_at, strict, multiple_code_nodes)
-	 	#initializes the return variable
+	def submit_job(name, description, code, nb_splayds, churn_trace, options, session_id, scheduled_at, strict, multiple_code_nodes, designated_splayds_string, splayds_as_job)
+		#initializes the return variable
 		ret = Hash.new
 		#checks the validity of the session ID and stores the returning value in the variable user
 		user = check_session_id(session_id)
@@ -231,6 +231,35 @@ class Ctrl_api
 			end
 
 			$db.do("INSERT INTO jobs SET ref='#{ref}' #{to_sql(options)}, #{description_field} #{name_field} #{churn_field} code='#{addslashes(code)}', user_id=#{user_id}, created_at='#{time_now}'")
+
+			#designated splayds
+			if designated_splayds_string != "" then
+				#eliminate white spaces
+				job_id = $db.select_one("SELECT id FROM jobs WHERE ref='#{ref}'")
+				designated_splayds_string.delete(' ')
+				#prepare query
+				q_jds = ""
+				designated_splayds_string.split(',').each { |splayd_id|
+					q_jds = q_jds + "('#{job_id}','#{splayd_id}'),"
+				}
+				q_jds = q_jds[0, q_jds.length - 1]
+				$db.do("INSERT INTO job_designated_splayds (job_id, splayd_id) VALUES #{q_jds}")
+			end
+
+			#use the same splayds as another job
+			if splayds_as_job != "" then
+				job_id = $db.select_one("SELECT id FROM jobs WHERE ref='#{ref}'")
+				other_job_id = splayds_as_job
+				other_job_nb_splayds = $db.select_one("SELECT nb_splayds FROM jobs WHERE id='#{other_job_id}'")
+				$db.do "UPDATE jobs SET nb_splayds='#{other_job_nb_splayds}' WHERE id='#{job_id}'"
+				q_jds = ""
+				$db.select_all "SELECT * FROM splayd_selections
+						WHERE job_id='#{other_job_id}' AND selected='TRUE'" do |jds|
+					q_jds = q_jds + "('#{job_id}','#{jds['splayd_id']}'),"
+				end
+				q_jds = q_jds[0, q_jds.length - 1]
+				$db.do "INSERT INTO job_designated_splayds (job_id,splayd_id) VALUES #{q_jds}"
+			end
 
 			timeout = 30
 			while timeout > 0

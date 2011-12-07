@@ -19,7 +19,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with Splayd. If not, see <http://www.gnu.org/licenses/>.
 
-require '../lib/common.rb'
+#require '../lib/common.rb'
 #library required for hashing
 require 'digest/sha1'
 
@@ -30,6 +30,8 @@ require "base64"
 require 'zlib'
 require 'archive/tar/minitar'
 include Archive::Tar
+
+require 'tmpdir'
 
 class LuaMerger
 

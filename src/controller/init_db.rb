@@ -31,6 +31,7 @@ def drop_db(db)
 	db.do("DROP TABLE IF EXISTS splayd_availabilities")
 	db.do("DROP TABLE IF EXISTS jobs")
 	db.do("DROP TABLE IF EXISTS job_mandatory_splayds")
+	db.do("DROP TABLE IF EXISTS job_designated_splayds")
 	db.do("DROP TABLE IF EXISTS splayd_jobs")
 	db.do("DROP TABLE IF EXISTS splayd_selections")
 	db.do("DROP TABLE IF EXISTS blacklist_hosts")
@@ -97,9 +98,9 @@ def init_db(db)
 			ref VARCHAR(255) NOT NULL,
 			user_id INT NOT NULL,
 			created_at datetime default NULL,
-                        scheduled_at datetime default NULL,
-                        strict ENUM('TRUE','FALSE') DEFAULT 'FALSE',
-						multifile ENUM('TRUE','FALSE') DEFAULT 'FALSE',
+            scheduled_at datetime default NULL,
+            strict ENUM('TRUE','FALSE') DEFAULT 'FALSE',
+			multifile ENUM('TRUE','FALSE') DEFAULT 'FALSE',
 			
 			name VARCHAR(255),
 			description VARCHAR(255),
@@ -156,6 +157,13 @@ def init_db(db)
 			job_id INT NOT NULL,
 			splayd_id INT NOT NULL
 			)")
+
+	db.do("CREATE TABLE IF NOT EXISTS job_designated_splayds (
+			id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+			job_id INT NOT NULL,
+			splayd_id INT NOT NULL
+			)")
+
 
 	db.do("CREATE TABLE IF NOT EXISTS splayd_jobs (
 			id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
