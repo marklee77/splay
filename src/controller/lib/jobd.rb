@@ -442,7 +442,6 @@ class Jobd
 		end
 
 		# Designated splayds filter
-		# ??? also use resource and bytecode filters ???
 		designated_ok = true
 		$db.select_all("SELECT * FROM job_designated_splayds
 				WHERE job_id='#{job['id']}'") do |jds|
