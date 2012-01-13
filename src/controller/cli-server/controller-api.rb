@@ -250,15 +250,30 @@ class Ctrl_api
 			if splayds_as_job != "" then
 				job_id = $db.select_one("SELECT id FROM jobs WHERE ref='#{ref}'")
 				other_job_id = splayds_as_job
-				other_job_nb_splayds = $db.select_one("SELECT nb_splayds FROM jobs WHERE id='#{other_job_id}'")
-				$db.do "UPDATE jobs SET nb_splayds='#{other_job_nb_splayds}' WHERE id='#{job_id}'"
-				q_jds = ""
-				$db.select_all "SELECT * FROM splayd_selections
-						WHERE job_id='#{other_job_id}' AND selected='TRUE'" do |jds|
-					q_jds = q_jds + "('#{job_id}','#{jds['splayd_id']}'),"
+
+				# check if the other job 
+				# 1. was killed before execution (and splayds booking)
+				# 2. is currently queued 
+				# 3. it was rejected because of the lack of resources 
+				other_job_splayds = $db.select_one("SELECT * FROM splayd_selections WHERE job_id='#{other_job_id}' AND selected='TRUE'")
+				other_job_status = $db.select_one("SELECT status FROM jobs WHERE id='#{other_job_id}' AND (status='KILLED' OR status='QUEUED' OR status='NO_RESSOURCES')")
+
+				if (other_job_status != nil && other_job_splayds == nil) then
+					$db.do "INSERT INTO job_designated_splayds (job_id,other_job_status) VALUES ('#{job_id}','#{other_job_status}')"
+				else
+					# find the number of splayds used by the other job
+					other_job_nb_splayds = $db.select_one("SELECT nb_splayds FROM jobs WHERE id='#{other_job_id}'")
+					$db.do "UPDATE jobs SET nb_splayds='#{other_job_nb_splayds}' WHERE id='#{job_id}'"
+
+					# find the splayds used by the other job
+					q_jds = ""
+					$db.select_all "SELECT * FROM splayd_selections
+							WHERE job_id='#{other_job_id}' AND selected='TRUE'" do |jds|
+						q_jds = q_jds + "('#{job_id}','#{jds['splayd_id']}'),"
+					end
+					q_jds = q_jds[0, q_jds.length - 1]
+					$db.do "INSERT INTO job_designated_splayds (job_id,splayd_id) VALUES #{q_jds}"
 				end
-				q_jds = q_jds[0, q_jds.length - 1]
-				$db.do "INSERT INTO job_designated_splayds (job_id,splayd_id) VALUES #{q_jds}"
 			end
 
 			timeout = 30

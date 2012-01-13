@@ -456,6 +456,7 @@ class JobdTrace < Jobd
 							job_id='#{job['id']}' AND trace_status='RUNNING'")
 				end
 
+
 				# We change it before sending the START commands because it
 				# seems more consistant... We had problem with first jobs
 				# begining to log before the status change was done and refused

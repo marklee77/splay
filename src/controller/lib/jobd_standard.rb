@@ -77,6 +77,19 @@ class JobdStandard < Jobd
 				c_splayd['nb_nodes'][splayd_id] = c_splayd['nb_nodes'][splayd_id] + 1
 			end
 
+			# redundant - inserts twice in the database 
+			#$db.select_all "SELECT * FROM job_designated_splayds
+			#		WHERE job_id='#{job['id']}'" do |jds|
+
+			#	splayd_id = jds['splayd_id']
+			#	q_sel = q_sel + "('#{splayd_id}','#{job['id']}'),"
+			#	q_job = q_job + "('#{splayd_id}','#{job['id']}','RESERVED'),"
+			#	q_act = q_act + "('#{splayd_id}','#{job['id']}','REGISTER', 'TEMP'),"
+
+				# We update the cache
+			#	c_splayd['nb_nodes'][splayd_id] = c_splayd['nb_nodes'][splayd_id] + 1
+			#end
+
 			q_sel = q_sel[0, q_sel.length - 1]
 			q_job = q_job[0, q_job.length - 1]
 			q_act = q_act[0, q_act.length - 1]

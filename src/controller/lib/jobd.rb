@@ -233,7 +233,7 @@ class Jobd
 	end
 
 	def self.create_filter_query(job)
-
+		status_msg = ""
 		version_filter = ""
 		if job['splayd_version']
 			version_filter += " AND version='#{job['splayd_version']}' "
@@ -286,7 +286,7 @@ class Jobd
 				next
 			end
 		end
-		
+
 		hostmasks_filter = ""
 		if job['hostmasks']
 			# TODO split with "|"
@@ -316,11 +316,15 @@ class Jobd
 			mandatory_filter += " AND splayds.id!=#{mm['splayd_id']} "
 		end
 
-		# problem here
 		designated_filter = ""
 		pos = 0
 		$db.select_all "SELECT * FROM job_designated_splayds
 				WHERE job_id='#{job['id']}'" do |jds|
+			if (jds['other_job_status'].to_s == "OK") == false then 
+				status_msg += "Rejected due to referenced job status: " + jds['other_job_status'] + ".\n"
+				designated_filter = " AND (FALSE"
+				break
+			end
 			if pos == 0
 				designated_filter += " AND (splayds.id=#{jds['splayd_id']}"
 			else
@@ -342,7 +346,7 @@ class Jobd
 				#{designated_filter}
 				#{hostmasks_filter}
 				#{distance_filter}
-				ORDER BY RAND()"
+				ORDER BY RAND()", status_msg
 	end
 
 	def self.create_job_json(job)
@@ -422,13 +426,16 @@ class Jobd
 			end
 		end
 
-		status_msg = ""
+		if !(defined? status_msg) then
+			status_msg = ""
+		end
 		normal_ok = true
 
 		# To select the splayds that have the lowest percentage of occupation 
 		occupation = {}
 
-		$db.select_all(create_filter_query(job)) do |m|
+		filter_query_answer, msg = create_filter_query(job)
+		$db.select_all(filter_query_answer) do |m|
 			if m['network_send_speed'] / c_splayd['max_number'][m['id']] >=
 					job['network_send_speed'] and
 					m['network_receive_speed'] / c_splayd['max_number'][m['id']] >=
@@ -441,44 +448,30 @@ class Jobd
 			end
 		end
 
-		# Designated splayds filter
-		designated_ok = true
-		$db.select_all("SELECT * FROM job_designated_splayds
-				WHERE job_id='#{job['id']}'") do |jds|
-			ds = $db.select_one "SELECT id FROM splayds WHERE
-					id='#{jds['splayd_id']}'"
-			if ds
-				if c_splayd['nb_nodes'][ds['id']] == c_splayd['max_number'][ds['id']]
-					status_msg += "Designated splayd: #{ds['id']} " +
-							"has no free slot.\n"
-					designated_ok = false
-				end
-			else
-				status_msg += "Designated splayd: #{jds['splayd_id']}" + 
-					" does not have the requested ressources or is not available.\n"
-				designated_ok = false # redundant???
-				no_resources = true
-			end
-		end
-
 		no_resources = false
 
 		# Compute the number of splayds with the required characteristics
 		if occupation.size < job['nb_splayds']
 			nb_total = 0
-			$db.select_all(create_filter_query(job)) do |m|
+			filter_query_answer, msg = create_filter_query(job)
+			$db.select_all(filter_query_answer) do |m|
 				nb_total = nb_total + 1
-		end
+			end
 
 			# Set flag if not enough splayds are available
 			if nb_total < job['nb_splayds']
 				no_resources = true
 			end
 
-			status_msg += "Not enough splayds found with the requested ressources " +
-					"(only #{occupation.size} instead of #{job['nb_splayds']}) \n"
-				normal_ok = false
-			 end
+			if msg == ""
+				status_msg += "Not enough splayds found with the requested ressources " +
+						"(only #{occupation.size} instead of #{job['nb_splayds']}) \n"
+			else 
+				status_msg = msg
+			end
+
+			normal_ok = false
+		end
 
 			### Mandatory splayds
 			mandatory_ok = true
@@ -505,19 +498,18 @@ class Jobd
 				end
 			 end
 
-			 # Set status to NO_RESOURCES
-			 if no_resources #(not normal_ok and no_resources) or (not designated_ok and no_resources) 
+			# Set status to NO_RESOURCES
+			if no_resources #(not normal_ok and no_resources) or (not designated_ok and no_resources) 
 				set_job_status(job['id'], 'NO_RESSOURCES', status_msg)
-				return c_splayd, occupation, status_msg, normal_ok, mandatory_ok, designated_ok, no_resources, true
-			 end
+				return c_splayd, occupation, status_msg, normal_ok, mandatory_ok, no_resources, true
+			end
 
-		return c_splayd, occupation, status_msg, normal_ok, mandatory_ok, designated_ok, no_resources, false
+		return c_splayd, occupation, status_msg, normal_ok, mandatory_ok, no_resources, false
 	end
 
-	# Splayds selection for JobdStandard and JobdTrace
 	def self.status_local_common(job)
 
-		c_splayd, occupation, status_msg, normal_ok, mandatory_ok, designated_ok, no_resources, do_next = self.select_splayds(job)
+		c_splayd, occupation, status_msg, normal_ok, mandatory_ok, no_resources, do_next = self.select_splayds(job)
 		if do_next == true
 			return c_splayd, occupation, 0, nil, true
 		end
@@ -529,12 +521,12 @@ class Jobd
 			return c_splayd, occupation, 0, nil, true
 		end
 
-		if(not normal_ok or not designated_ok) and not no_resources
+		if(not normal_ok) and not no_resources
 			if job['strict'] == "FALSE"
 				set_job_status(job['id'], 'QUEUED', status_msg)
 				return c_splayd, occupation, 0, nil, true
 			else
-				status_msg = "Cannot be submitted immediately: " + 
+				status_msg += "Cannot be submitted immediately: " + 
 					"Not enough splayds found with the requested resources " + 
 					"(only #{occupation.size} instead of #{job['nb_splayds']}) \n"
 				set_job_status(job['id'], 'NO_RESSOURCES', status_msg)
@@ -574,24 +566,24 @@ class Jobd
 	end
 
 	def self.status_queued_common(job)
-		c_splayd, occupation, status_msg, normal_ok, mandatory_ok, designated_ok, no_resources, do_next = self.select_splayds(job)
+		c_splayd, occupation, status_msg, normal_ok, mandatory_ok, no_resources, do_next = self.select_splayds(job)
 		if do_next == true
 			return c_splayd, occupation, 0, nil, true
 		end
 
-		if (not normal_ok or not designated_ok) and no_resources
+		if (not normal_ok) and no_resources
 			set_job_status(job['id'], 'NO_RESSOURCES', status_msg)
 			return c_splayd, occupation, 0, nil, true
 		end
 
-		if (not normal_ok or not designated_ok) and not no_resources
+		if (not normal_ok) and not no_resources
 			if job['strict'] == "FALSE"
 				return c_splayd, occupation, 0, nil, true
 			else
 				status_msg = "Cannot be submitted immediately: " + 
 					"Not enough splayds found with the requested resources " + 
 					"(only #{occupation.size} instead of #{job['nb_splayds']}) \n"
-				set_job_status(job['id'], 'NO_RESSOURCES', status_msg)
+					set_job_status(job['id'], 'NO_RESSOURCES', status_msg)
 				return c_splayd, occupation, 0, nil, true
 			end
 		end

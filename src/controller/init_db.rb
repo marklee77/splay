@@ -98,8 +98,8 @@ def init_db(db)
 			ref VARCHAR(255) NOT NULL,
 			user_id INT NOT NULL,
 			created_at datetime default NULL,
-            scheduled_at datetime default NULL,
-            strict ENUM('TRUE','FALSE') DEFAULT 'FALSE',
+                        scheduled_at datetime default NULL,
+                        strict ENUM('TRUE','FALSE') DEFAULT 'FALSE',
 			multifile ENUM('TRUE','FALSE') DEFAULT 'FALSE',
 			
 			name VARCHAR(255),
@@ -161,7 +161,8 @@ def init_db(db)
 	db.do("CREATE TABLE IF NOT EXISTS job_designated_splayds (
 			id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 			job_id INT NOT NULL,
-			splayd_id INT NOT NULL
+			splayd_id INT,
+			other_job_status ENUM('OK','KILLED','QUEUED','NO_RESSOURCES') DEFAULT 'OK'
 			)")
 
 
