@@ -1,0 +1,451 @@
+<% if SplayController::localization %>
+<script src="http://maps.google.com/maps?file=api&amp;v=2&amp;key=<%= SplayController::google_key %>" type="text/javascript"></script>
+<script src="http://www.google.com/jsapi" type="text/javascript"></script>
+<script type='text/javascript'>
+
+	google.load('visualization', '1', {packages:['corechart']});
+	google.load('visualization', '1', {packages:['annotatedtimeline']});
+	google.setOnLoadCallback(drawChart_cpuLoad);
+
+	var measurements = [<%= @splayd.get_measurements(@splayd.id) %>];
+
+	var chart = null;
+
+	function drawChart_cpuLoad() {
+		var data = new google.visualization.DataTable();
+		data.addColumn('datetime', 'Time');
+		data.addColumn('number', 'CPU load');
+
+		data.addRows(measurements.length/11);
+
+		var i=0;
+		for (i=0; i<measurements.length/11; i++) {
+			var d = new Date(measurements[11*i+1] * 1000); 	//timestamp
+			data.setValue(i, 0, d);
+			data.setValue(i, 1, measurements[11*i+3]);	//cpu load avg over last 5 minutes
+		}
+
+		if (chart == null) {
+			chart = new google.visualization.AnnotatedTimeLine(document.getElementById('chart_div'));
+		}
+		chart.draw(data, {displayAnnotations: false, allowRedraw:true, displayZoomButtons: false, displayRangeSelector: true});
+	}
+
+	function drawChart_bandwidth() {
+		var data = new google.visualization.DataTable();
+		data.addColumn('datetime', 'Time');
+		data.addColumn('number', 'Download speed (bps)');
+		data.addColumn('number', 'Upload speed (bps)');
+
+		data.addRows(measurements.length/11);
+
+		var prev_bytes_received = 0;
+		var prev_bytes_transmitted = 0;
+		var prev_timestamp = 0;
+
+		var i=0;
+		for (i=0; i<measurements.length/11; i++) {
+			var download_speed = 0;
+			var upload_speed = 0;
+
+			var bytes_received = measurements[11*i+5];
+			var bytes_transmitted = measurements[11*i+6];
+			var timestamp = measurements[11*i+1];
+
+			//get number of epoch seconds
+			//var timestamp = Date.UTC(d.getFullYear(),d.getMonth(), d.getDay(), d.getHours(), d.getMinutes(), d.getSeconds())/1000;
+			download_speed = (bytes_received - prev_bytes_received)/(timestamp - prev_timestamp);
+			upload_speed = (bytes_transmitted - prev_bytes_transmitted)/(timestamp - prev_timestamp);
+
+			prev_bytes_received = bytes_received;
+			prev_bytes_transmitted = bytes_transmitted;
+			prev_timestamp = timestamp;
+
+			var d = new Date(timestamp * 1000);
+			data.setValue(i, 0, d); 		// timestamp
+			data.setValue(i, 1, download_speed);	// download bps
+			data.setValue(i, 2, upload_speed);	// upload bps
+		}
+
+		if (chart == null) {
+			chart = new google.visualization.AnnotatedTimeLine(document.getElementById('chart_div'));
+		}
+		chart.draw(data, {displayAnnotations: false, allowRedraw:true, displayZoomButtons: false, displayRangeSelector: true});
+	}
+
+	function drawChart_memory() {
+		var data = new google.visualization.DataTable();
+		data.addColumn('datetime', 'Time');
+		data.addColumn('number', 'Memory used (KB)');
+
+		data.addRows(measurements.length/11);
+
+		var i=0;
+		for (i=0; i<measurements.length/11; i++) {
+			var d = new Date(measurements[11*i+1] * 1000);		//timestamp
+			data.setValue(i, 0, d);
+			data.setValue(i, 1, measurements[11*i+7]);		//used memory (KB)
+		}
+
+		if (chart == null) {
+			chart = new google.visualization.AnnotatedTimeLine(document.getElementById('chart_div'));
+		}
+		chart.draw(data, {displayAnnotations: false, allowRedraw:true, displayZoomButtons: false, displayRangeSelector: true});
+	}
+
+	function drawChart_slotsInUse() {
+		var data = new google.visualization.DataTable();
+		data.addColumn('datetime', 'Time');
+		data.addColumn('number', 'Slots in use');
+
+		data.addRows(measurements.length/11);
+
+		var i=0;
+		for (i=0; i<measurements.length/11; i++) {
+			var d = new Date(measurements[11*i+1] * 1000);		//timestamp
+			data.setValue(i, 0, d);
+			data.setValue(i, 1, measurements[11*i+8]);		//slots in use
+		}
+
+		if (chart == null) {
+			chart = new google.visualization.AnnotatedTimeLine(document.getElementById('chart_div'));
+		}
+		chart.draw(data, {displayAnnotations: false, allowRedraw:true, displayZoomButtons: false, displayRangeSelector: true});
+	}
+
+	function drawChart_diskload() {
+		var data = new google.visualization.DataTable();
+		data.addColumn('datetime', 'Time');
+		data.addColumn('number', 'Sectors read per sec');
+		data.addColumn('number', 'Sectors written per sec');
+
+		data.addRows(measurements.length/11);
+
+		var prev_sectors_read = 0;
+		var prev_sectors_written = 0;
+		var prev_timestamp = 0;
+
+		var i=0;
+		for (i=0; i<measurements.length/11; i++) {
+			var sectors_read_per_sec = 0;
+			var sectors_written_per_sec = 0;
+
+			var sectors_read = measurements[11*i+9];
+			var sectors_written = measurements[11*i+10];
+			var timestamp = measurements[11*i+1];
+
+			//get number of epoch seconds
+			//var timestamp = Date.UTC(d.getFullYear(),d.getMonth(), d.getDay(), d.getHours(), d.getMinutes(), d.getSeconds())/1000;
+			sectors_read_per_sec = (sectors_read - prev_sectors_read)/(timestamp - prev_timestamp);
+			sectors_written_per_sec = (sectors_written - prev_sectors_written)/(timestamp - prev_timestamp);
+
+			prev_sectors_read = sectors_read;
+			prev_sectors_written = sectors_written;
+			prev_timestamp = timestamp;
+
+			var d = new Date(timestamp * 1000);
+			data.setValue(i, 0, d); 			// timestamp
+			data.setValue(i, 1, sectors_read_per_sec);	// sectors read per sec
+			data.setValue(i, 2, sectors_written_per_sec);	// sectors written per sec
+		}
+
+		if (chart == null) {
+			chart = new google.visualization.AnnotatedTimeLine(document.getElementById('chart_div'));
+		}
+		chart.draw(data, {displayAnnotations: false, allowRedraw:true, displayZoomButtons: false, displayRangeSelector: true});
+	}
+
+	function selectChart(droplist) {
+		if (droplist == null || document.getElementById('chart_div') == null )
+			return;
+		chart = null;
+		document.getElementById('chart_div').innerHTML = "";
+		if (droplist.value == "select_cpuload") {
+			drawChart_cpuLoad();
+		}
+		if (droplist.value == "select_bandwidth") {
+			drawChart_bandwidth();
+		}
+		if (droplist.value == "select_memory") {
+			drawChart_memory();
+		}
+		if (droplist.value == "select_slots") {
+			drawChart_slotsInUse();
+		}
+		if (droplist.value == "select_diskload") {
+			drawChart_diskload();
+		}
+	}
+
+	function updateChart(droplist) {
+		if (droplist == null || document.getElementById('chart_div') == null )
+			return;
+		if (droplist.value == "select_cpuload") {
+			drawChart_cpuLoad();
+		}
+		if (droplist.value == "select_bandwidth") {
+			drawChart_bandwidth();
+		}
+		if (droplist.value == "select_memory") {
+			drawChart_memory();
+		}
+		if (droplist.value == "select_slots") {
+			drawChart_slotsInUse();
+		}
+		if (droplist.value == "select_diskload") {
+			drawChart_diskload();
+		}
+	}
+
+	function getSplaydMeasurements(splayd_id) {
+		var xmlhttp;
+		if (window.XMLHttpRequest) {
+			// code for IE7+, Firefox, Chrome, Opera, Safari
+			xmlhttp = new XMLHttpRequest();
+		}
+		else {
+			// code for IE6, IE5
+			xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+		}
+		if (xmlhttp) {
+			xmlhttp.open("GET", "http://davel21.no-ip.org:5554/get-measurements?splayd_id=" + splayd_id + "&timestamp=" + timestamp, true);
+			xmlhttp.onreadystatechange=function() {
+				if (xmlhttp.readyState==4 && xmlhttp.status==200) {
+					
+					eval("measurements_new = ["+xmlhttp.responseText+"];");
+					measurements.push.apply(measurements, measurements_new);
+
+					timestamp = measurements[measurements.length - 10];
+
+					updateChart(document.getElementById('chart_droplist'));
+					//setTimeout("getSplaydMeasurements(" + splayd_id + "," + timestamp +")", 30000);
+				}
+			}
+			xmlhttp.send();
+		}
+		
+	}
+
+	var timestamp = measurements[measurements.length - 10];
+	var splayd_id = <%= @splayd.id %>;
+	window.onload=function(){setInterval("getSplaydMeasurements(" + splayd_id +")", 30000);}
+
+</script>
+
+<script type="text/javascript">
+//<![CDATA[
+
+	// http://brennan.offwhite.net/maps/icons/
+	if (GBrowserIsCompatible()) {
+		$(document).ready(function() {
+
+			if ( document.getElementById("map_canvas") == null ) {
+				return;
+			}
+
+			//GLog.write("start");
+			var center;
+			var circle;
+			var geocoder = new GClientGeocoder() 
+
+			var map = new GMap2(document.getElementById("map_canvas"));
+			map.setCenter(new GLatLng(46.99984008366778, 6.949866414070129), 1);
+			map.addControl(new GLargeMapControl());
+			map.addControl(new GMapTypeControl());
+			//map.enableScrollWheelZoom();
+			map.addControl(new GScaleControl()) ;
+			//map.addControl(new GOverviewMapControl()) ;
+
+			var baseIcon = new GIcon();
+			baseIcon.iconSize = new GSize(12, 20);
+			baseIcon.iconAnchor = new GPoint(6, 20);
+			
+			var resetIcon = new GIcon(baseIcon);
+			resetIcon.image = "http://labs.google.com/ridefinder/images/mm_20_red.png";
+			var availableIcon = new GIcon(baseIcon);
+			availableIcon.image = "http://labs.google.com/ridefinder/images/mm_20_green.png";
+			var unavailableIcon = new GIcon(baseIcon);
+			unavailableIcon.image = "http://labs.google.com/ridefinder/images/mm_20_orange.png";
+			var registeredIcon = new GIcon(baseIcon);
+			registeredIcon.image = "http://labs.google.com/ridefinder/images/mm_20_blue.png";
+			var undefIcon = new GIcon(baseIcon);
+			undefIcon.image = "http://labs.google.com/ridefinder/images/mm_20_white.png";
+
+			var resetOptions = {icon: resetIcon,  title: "RESET"};
+			var availableOptions = {icon: availableIcon,  title: "AVAILABLE"};
+			var unavailableOptions = {icon: unavailableIcon,  title: "UNAVAILABLE"};
+			var registeredOptions = {icon: registeredIcon,  title: "REGISTERED"};
+			var undefOptions = {icon: undefIcon,  title: "MULTIPLE STATUS"};
+
+			function set_marker(type, lat, lng) {
+				var ll = new GLatLng(lat, lng);
+				var gm;
+				if (type == "AVAILABLE") {
+					gm = new GMarker(ll, availableOptions);
+				} else if (type == "UNAVAILABLE") {
+					gm = new GMarker(ll, unavailableOptions);
+				} else if (type == "RESET") {
+					gm = new GMarker(ll, resetOptions);
+				} else if (type == "REGISTERED") {
+					gm = new GMarker(ll, registeredOptions);
+				} else {
+					gm = new GMarker(ll, undefOptions);
+				}
+				map.addOverlay(gm);
+			}
+
+<%#      set_marker('AVAILABLE', 0, 0);%>
+<%#      set_marker('UNAVAILABLE', 10, 0);%>
+<%#      set_marker('RESET', 0, 10);%>
+<%#      set_marker('REGISTERED', 10, 10);%>
+
+<% if SplayController::localization and @splayd['latitude'] and @splayd['longitude'] %>
+set_marker('<%= @splayd['status'] %>', <%= @splayd['latitude'] %>, <%= @splayd['longitude'] %>);
+<% end %>
+
+		});
+	}
+
+//]]>
+</script>
+<% end #localization %>
+
+<%= link_to 'List', :action => 'list' %>
+
+<table class="smart_table" cellspacing="0">
+  <thead>
+  <tr>
+    <th class="nobg" style="width: 200px"><%= @splayd.name %></th>
+    <th class="top">
+<%= @splayd.ip %>
+<%= if @splayd.hostname then "(#{@splayd.hostname})" end %>
+    </th>
+  </tr>
+  </thead>
+  <tbody>
+	<tr>
+		<th>Status</th>
+		<td>
+			<%= @splayd.status %>
+		</td>
+	</tr>
+	<% if @splayd.city and @splayd.city != "" %>
+	<tr>
+		<th>Localization</th>
+		<td><%= iso_to_utf8 @splayd.city %>, <%= @splayd.country %></td>
+	</tr>
+	<% end %>
+	<tr>
+		<th>Splayd version</th>
+		<td><%= @splayd.version %></td>
+	</tr>
+	<tr>
+		<th>Lua version</th>
+		<td><%= @splayd.lua_version %></td>
+	</tr>
+	<tr>
+		<th>Architecture</th>
+    <td>
+      <%= @splayd.os %>, <%= @splayd.bits %> bits, <%= @splayd.endianness %> endian
+    </td>
+	</tr>
+	<tr>
+		<th>uname -a</th>
+		<td><%= @splayd.full_os %></td>
+	</tr>
+	<tr>
+		<th>Load (1, 5, 15)</th>
+		<td><%= @splayd.get_last_measurements(@splayd.id).load_1 %> <%= @splayd.get_last_measurements(@splayd.id).load_5 %> <%= @splayd.get_last_measurements(@splayd.id).load_15 %></td>
+	</tr>
+	<tr>
+    <th>Job limits (<%= @splayd.max_number %>)</th>
+		<td>
+      <table class="smart_table" cellspacing="0">
+				<tr>
+					<th style="width: 200px">Max mem</th>
+					<td><%= @splayd.max_mem / 1024 / 1024 %> Mo</td>
+				</tr>
+				<tr>
+					<th>Disk max size</th>
+					<td><%= @splayd.disk_max_size / 1024 / 1024 %> Mo</td>
+				</tr>
+				<tr>
+					<th>Disk max files</th>
+					<td><%= @splayd.disk_max_files %></td>
+				</tr>
+				<tr>
+					<th>Disk max file descriptors</th>
+					<td><%= @splayd.disk_max_file_descriptors %></td>
+				</tr>
+				<tr>
+					<th>Network max send</th>
+					<td><%= @splayd.network_max_send / 1024 / 1024 %> Mo</td>
+				</tr>
+				<tr>
+					<th>Network max receive</th>
+					<td><%= @splayd.network_max_receive / 1024 / 1024 %> Mo</td>
+				</tr>
+				<tr>
+					<th>Network max ports</th>
+					<td><%= @splayd.network_max_ports %></td>
+				</tr>
+				<tr>
+					<th>Network max sockets</th>
+					<td><%= @splayd.network_max_sockets %></td>
+				</tr>
+				<tr>
+					<th>Network send speed</th>
+					<td>
+						<%= @splayd.network_send_speed / @splayd.max_number / 1024 %> Ko/s
+					</td>
+				</tr>
+				<tr>
+					<th>Network receive speed</th>
+					<td>
+						<%= @splayd.network_receive_speed / @splayd.max_number / 1024 %> Ko/s
+					</td>
+	</tr>
+	</tbody>
+			</table>
+		</td>
+	</tr>
+  </tbody>
+</table>
+
+<% if SplayController::localization and @splayd['latitude'] and @splayd['longitude'] %>
+<div id="map_canvas" style="width: 600px; height: 350px"></div>
+<% end %>
+
+<h2>Running jobs</h2>
+<table>
+<% for job in @splayd.jobs %>
+	<% if job.status=='RUNNING' %>
+	<tr>
+		<td class="id"><%= job.id %></td>
+		<% if current_user.admin == 1 %>
+		<td class="user"><%= job.user.login %></td>
+		<% end %>
+		<td class="show"><%= link_to 'Show', :controller => 'job', :action => 'show', :id => job %></td>
+	</tr>
+	<% end %>
+<% end %>
+</table>
+
+<h2>Stats</h2>
+<p>
+	<select onchange="selectChart(this)" id="chart_droplist">
+		<option value="select_cpuload">CPU load</option>
+		<option value="select_bandwidth">Bandwidth</option>
+		<option value="select_memory">Memory</option>
+		<option value="select_slots">Slots in use</option>
+		<option value="select_diskload">Diskload</option>
+	</select>
+</p>
+
+<div id='chart_div' style='width: 700px; height: 240px;'></div>
+
+<%#
+if @splayd.status != "DELETED"
+	link_to('Delete', {:action => 'delete', :id => @splayd },
+			:confirm => 'Are you sure?', :method => :post)
+end %>
