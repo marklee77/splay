@@ -1,0 +1,152 @@
+Controller1.3
+
+-------------------------------------------------------------------
+Set-up
+-------------------------------------------------------------------
+sudo apt-get install curl
+\curl -L https://get.rvm.io | bash -s stable --ruby
+------------
+        Installation of rubygems did not complete successfully.
+
+        source /home/raluca/.rvm/scripts/rvm
+        sudo apt-get update
+        rvm get head --autolibs=3
+        rvm requirements
+        sudo apt-get install build-essential libreadline6-dev zlib1g-dev libssl-dev libyaml-dev libsqlite3-dev sqlite3 libxml2-dev libxslt-dev libgdbm-dev ncurses-dev automake libffi-dev
+------------
+rvm install ruby-2.0.0
+rvm ruby-2.0.0 do gem install dbi mysql
+------------
+        -> ERROR:  Error installing mysql:
+
+        sudo apt-get install mysql-client mysql-server
+        sudo apt-get install libmysqlclient-dev
+------------
+rvm ruby-2.0.0 do gem install nokogiri bundler algorithms openssl-nonblock json dbd-mysql geoip
+
+-------------------------------------------------------
+Changes in the controller
+-------------------------------------------------------
+jobd.rb:333         comment next.
+jobd.rb:636         replace ":" by "then" in the case statement.
+jobd_grid.rb:79     comment next.
+splayd.rb:45        replace TCPserver by TCPServer.
+logd.rb:50          replace TCPserver by TCPServer.
+
+Used require_relative whenever appropriate.
+
+* due to MySql 5.1: init_db.rb, reset_splayds.rb : replace "type=innodb" by "engine=innodb".
+
+-------------------------------------------------------
+Issues:
+-------------------------------------------------------
+controller-api.rb:378 - 383: comment queued job behavior because it's repeating
+controlelr-api.rb:299        added lib['lib_sha1'] = a_lib['lib_sha1'] because splay-list-lib.lua -l hello.so was trying to use lib['lib_sha1'], which led to an error.
+
+
+DBI is broken: jobd.rb:272: send_start(job, query); $db.select_all query returns incomplete results and duplicates.
+$db.select_all "SELECT * FROM splayd_selections WHERE job_id='#{job['id']}' AND selected='TRUE'" 
+returns
+[[8, 8, 4, "TRUE", nil, "WAITING", "FALSE", "TRUE", #<BigDecimal:b60e322c,'0.6348E0',9(18)>, 16607], 
+ [8, 8, 4, "TRUE", nil, "WAITING", "FALSE", "TRUE", #<BigDecimal:b60e322c,'0.6348E0',9(18)>, 16607]]
+
+even if i select distinct... it's still the same!
+
+http://stackoverflow.com/questions/6385951/repeated-last-row-of-query
+
+-------------------------------------------------------
+Migration to RDBI
+-------------------------------------------------------
+
+Dependencies:
+rvm ruby-2.0.0 do gem install rdbi rdbi-driver-mysql rdbi-driver-mock test-unit rdbi-dbrc
+rvm ruby-2.0.0 do gem install --version '< 2.9.0' mysql (because mysql 2.8.1 is needed by rubygems)
+
+* rdbi and rdbi-driver-mysql tests can be run, but a change is needed: require 'helper' -> require_relative 'helper'
+
+Changes in the code:
+db_config.rb:23 Mysql         -> MySQL
+dbutils.rb:23   require 'dbi' -> require_relative 'sdbi'; commented require 'mysql' because it is not needed.
+dbutils.rb:31   DBI.connect   -> SDBI.connect; in the sdbi wrapper, the signature of connect is as it is in rdbi, to avoid concatenating the params and then parsing.
+dbutils.rb:49  i don't get why self.get_new_mysql  is needed; the only difference from get_new is that autocommit is set to false.
+
+distributed_lock.rb:52 and :64 comment db.do "BEGIN" and "COMMIT"
+distributed_lock.rb:55         added if !locks.empty?
+distributed_lock.rb            UPDATE locks SET #{name}='1' WHERE id ='1'; table locks doesn't have column name. check init_db
+splayd.rb:659, 668             comment db.do "BEGIN" and "COMMIT"
+
+
+-------------------------------------------------------
+Starting the controller
+-------------------------------------------------------
+controller.rb complains about NumLogd and NumSplayd being initialized twice. Is this really necessary? (it's just a warning)
+
+Output:
+controller.rb:27: warning: already initialized constant SplayControllerConfig::NumLogd
+/home/raluca/work/controller_1.3/lib/config.rb:54: warning: previous definition of NumLogd was here
+controller.rb:28: warning: already initialized constant SplayControllerConfig::NumSplayd
+/home/raluca/work/controller_1.3/lib/config.rb:53: warning: previous definition of NumSplayd was here
+
+
+-------------------------------------------------------
+Starting the cli server
+-------------------------------------------------------
+this warning has always been there.
+
+[2013-04-18 13:07:57] WARN  TCPServer Error: Address already in use - bind(2)
+
+
+-------------------------------------------------------
+Distributed-lock.rb is strange!
+-------------------------------------------------------
+
+-------------------------------------------------------
+Testing
+-------------------------------------------------------
+rvm ruby-2.0.0 do ruby -rubygems init_db.rb
+rvm ruby-2.0.0 do ruby -rubygems init_users.rb
+rvm ruby-2.0.0 do ruby -rubygems controller.rb
+rvm ruby-2.0.0 do ruby -rubygems cli-server.rb
+
+./splay-cluster-start.sh 1 25 10.0.2.15
+
+./splay-start-session.lua
+./splay-list-splayds.lua
+./splay-submit-job.lua sample.lua
+./splay-submit-job.lua sample.lua -n 25
+
+./splay-list-jobs.rb
+./splay-kill-job.rb 3
+
+./splay-submit-job.lua sample.lua -c sample-trace.trace
+
+Problem: errornous input is not treated kindly.
+
+- Splayds: 
+    + connected 10 splayds to the controller, terminated the controller process using CTRL+C and re-started it; splayds were able to connect back.
+    + splay-list-splayds.lua
+- Jobs:
+    + submit job using one/more splayds.
+    + queue job, kill job.
+    + job with churn:
+        lua splay-submit-job.lua sample.lua -c sample-trace.trace
+        lua splay-submit-job.lua sample.lua --churn=sample-trace.trace
+
+-------------------------------------------------------
+Bug in trunk/controller
+-------------------------------------------------------
+
+- jobd.rb, line 513: in self.select_splayds(job): "no_resources = false" should be placed before "# Designated splayds filter", not after
+
+-------------------------------------------------------------------
+Installing the daemon:
+-------------------------------------------------------------------
+
+sudo apt-get install lua5.1 liblua5.1-0-dev liblua5.1-socket2 liblua5.1-socket-dev libssl0.9.8 luasocket
+sudo apt-get install build-essential lua5.1 liblua5.1-0 liblua5.1-0-dev liblua5.1-socket2 liblua5.1-socket-dev libssl-dev libssl0.9.8 liblua5.1-sec1
+
+-------------------------------------------------------------------
+Installing the Command Line Interface:
+-------------------------------------------------------------------
+
+sudo apt-get install lua5.1 liblua5.1-socket2 liblua5.1-json

@@ -1,0 +1,7 @@
+#Things to notice:
+# http://www.ruby-lang.org/en/news/2013/02/24/ruby-2-0-0-p0-is-released/
+##THE SLASH '\' before curl is REQUIRED.
+\curl -L https://get.rvm.io | bash -s stable --ruby
+rvm install ruby-2.0.0 
+rvm ruby-2.0.0 do gem install dbi mysql nokogiri algorithms openssl-nonblock json dbd-mysql
+ruby -rubygems controller_fork.rb
