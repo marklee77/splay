@@ -28,6 +28,8 @@ class SDBI
     # executes a statement
     def self.do(stmt, *bindvars)
         res = @@dbh.execute(stmt, *bindvars)
+
+        if !res.sth.finished? then res.sth.finish end
     end
 
 
