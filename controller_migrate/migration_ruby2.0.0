@@ -1,7 +1,5 @@
-Controller1.3
-
 -------------------------------------------------------------------
-Set-up
+Controller set-up
 -------------------------------------------------------------------
 sudo apt-get install curl
 \curl -L https://get.rvm.io | bash -s stable --ruby
@@ -75,6 +73,17 @@ distributed_lock.rb:55         added if !locks.empty?
 distributed_lock.rb            UPDATE locks SET #{name}='1' WHERE id ='1'; table locks doesn't have column name. check init_db
 splayd.rb:659, 668             comment db.do "BEGIN" and "COMMIT"
 
+-------------------------------------------------------
+MySql Set-up
+-------------------------------------------------------
+
+mysql -u root -p
+
+mysql> create database splay;
+
+mysql> GRANT ALL PRIVILEGES ON splay.* TO 'splay'@'localhost' IDENTIFIED BY 'splay' WITH GRANT OPTION;
+
+mysql> quit;
 
 -------------------------------------------------------
 Starting the controller
